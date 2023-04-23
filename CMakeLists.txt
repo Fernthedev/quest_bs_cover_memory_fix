@@ -9,7 +9,7 @@ set(MOD_ID "bs_cover_memory_fix")
 # However, the instability was seen using Android.mk/ndk-build builds. With Ninja + CMake, this problem seems to have been solved.
 # As always, test thoroughly
 # - Fern
-# set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 cmake_minimum_required(VERSION 3.21)
 project(${COMPILE_ID})
@@ -79,23 +79,3 @@ add_custom_command(TARGET ${COMPILE_ID} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E rename stripped_lib${COMPILE_ID}.so lib${COMPILE_ID}.so
         COMMENT "Rename the stripped lib to regular"
         )
-        foreach(so_file ${so_list})
-        cmake_path(GET so_file FILENAME file)
-        
-        add_custom_command(TARGET ${COMPILE_ID} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy ${so_file} debug/${file}
-                COMMENT "Copy so files for ndk stack"
-        )
-        
-        add_custom_command(TARGET ${COMPILE_ID} POST_BUILD
-                COMMAND ${CMAKE_STRIP} -g -S -d --strip-all ${so_file} -o ${file}
-                COMMENT "Strip debug symbols from the dependencies")
-        endforeach()
-        
-        foreach(a_file ${a_list})
-        cmake_path(GET a_file FILENAME file)
-        
-        add_custom_command(TARGET ${COMPILE_ID} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${a_file} debug/${file}
-        COMMENT "Copy a files for ndk stack")
-        endforeach()
