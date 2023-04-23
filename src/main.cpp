@@ -114,12 +114,12 @@ Texture2D *DownScaleTexture(Texture2D *tex, const ScaleOptions &options) {
 
 #pragma endregion
 
-Task_1<Texture2D *> *ReadAndResizeImageAsync(
+Texture2D *ReadAndResizeImageAsync(
         StringW path,
         System::Threading::CancellationToken cancellationToken
 ) {
     if (cancellationToken.get_IsCancellationRequested()) {
-        return Task_1<Texture2D *>::New_ctor(nullptr);
+        return nullptr;
     }
 
     std::string sysPath = path;
@@ -133,9 +133,8 @@ Task_1<Texture2D *> *ReadAndResizeImageAsync(
 
 
     if (!file.is_open()) {
-        return Task_1<Texture2D *>::New_ctor(nullptr);
+        return nullptr;
     }
-
 
     // get its size:
     std::streampos fileSize;
@@ -147,29 +146,41 @@ Task_1<Texture2D *> *ReadAndResizeImageAsync(
     // reserve capacity
     ArrayW<uint8_t> data(fileSize);
 
+    std::thread s([&cancellationToken, &file, &data] {
+        if (cancellationToken.get_IsCancellationRequested()) {
+            return;
+        }
 
-    // read the data:
-    std::copy(std::istream_iterator<uint8_t>(file),
-              std::istream_iterator<uint8_t>(),
-            //dest
-              data.begin());
+        // read the data:
+        std::copy(std::istream_iterator<uint8_t>(file),
+                  std::istream_iterator<uint8_t>(),
+                //dest
+                  data.begin());
+    });
 
+    while (s.joinable()) {
+        if (cancellationToken.get_IsCancellationRequested()) {
+            return nullptr;
+        }
+
+        Task::Yield();
+    }
 
     if (cancellationToken.get_IsCancellationRequested()) {
-        return Task_1<Texture2D *>::New_ctor(nullptr);
+        return nullptr;
     }
 
     auto spriteTexture = Texture2D::New_ctor(IMAGE_SIZE, IMAGE_SIZE);
 
     if (cancellationToken.get_IsCancellationRequested()) {
-        return Task_1<Texture2D *>::New_ctor(nullptr);
+        return nullptr;
     }
 
-    if (!ImageConversion::LoadImage(spriteTexture, data))
-        return Task_1<Texture2D *>::New_ctor(nullptr);
+    if (!ImageConversion::LoadImage(spriteTexture, data, true))
+        return nullptr;
 
     if (cancellationToken.get_IsCancellationRequested()) {
-        return Task_1<Texture2D *>::New_ctor(nullptr);
+        return nullptr;
     }
 
     if (spriteTexture->get_width() > IMAGE_SIZE || spriteTexture->get_width() > IMAGE_SIZE) {
@@ -178,7 +189,7 @@ Task_1<Texture2D *> *ReadAndResizeImageAsync(
         Object::Destroy(oldSpriteTexture);
     }
 
-    return Task_1<Texture2D*>::New_ctor(spriteTexture);
+    return spriteTexture;
 }
 
 System::Threading::Tasks::Task_1<Sprite *> *MediaAsyncLoader_LoadSpriteAsync_replacement(
@@ -215,17 +226,11 @@ System::Threading::Tasks::Task_1<Sprite *> *MediaAsyncLoader_LoadSpriteAsync_rep
 
     auto spriteTexture = ReadAndResizeImageAsync(path, cancellationToken);
 
-    while (!spriteTexture->get_IsCompleted()) {
-        if (cancellationToken.get_IsCancellationRequested()) {
-            return Task_1<Sprite *>::New_ctor(nullptr);
-        }
-        Task::Yield();
-    }
 
-    auto spriteTextureResult = spriteTexture->get_Result();
+    auto spriteTextureResult = spriteTexture;
     float pixelsPerUnit = 100.0f;
     auto result = spriteTexture != nullptr
-           ? Sprite::Create(
+                  ? Sprite::Create(
                     spriteTextureResult,
                     Rect(0, 0, spriteTextureResult->get_width(), spriteTextureResult->get_height()),
                     Vector2(0, 0),
@@ -233,15 +238,15 @@ System::Threading::Tasks::Task_1<Sprite *> *MediaAsyncLoader_LoadSpriteAsync_rep
 
                     0,
                     SpriteMeshType::Tight,
-                    Vector4(0,0,0,0),
+                    Vector4(0, 0, 0, 0),
                     false
             )
-           : nullptr;
+                  : nullptr;
 
     profiler.endTimer();
     profiler.printMarks(PLogger.tag);
 
-    return Task_1<Sprite*>::New_ctor(result);
+    return Task_1<Sprite *>::New_ctor(result);
 }
 
 
